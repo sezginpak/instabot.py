@@ -44,7 +44,7 @@ class InstaBot:
     url_user_detail = "https://www.instagram.com/%s/"
     api_user_detail = "https://i.instagram.com/api/v1/users/%s/info/"
     instabot_repo_update = (
-        "https://github.com/instabot-py/instabot.py/raw/master/version.txt"
+        "https://github.com/sezginpak/instabot.py/raw/master/version.txt"
     )
 
     def __init__(self, **kwargs):
@@ -630,20 +630,23 @@ class InstaBot:
                                 self.logger.exception(exc)
                                 return False
 
-                            media_to_like = self.media_by_tag[i]['node']['id']
-                            media_to_like_url = self.url_media % self.media_by_tag[i]['node']['shortcode']
-                            self.logger.debug(f"Trying to like media: id: {media_to_like}, url: {media_to_like_url}")
-
-                            like = self.like(media_to_like)
+                            self.logger.debug(
+                                "Trying to like media: %s, %s"
+                                % (
+                                    self.media_by_tag[i]["node"]["id"],
+                                    self.url_media
+                                    % self.media_by_tag[i]["node"]["shortcode"],
+                                )
+                            )
+                            like = self.like(self.media_by_tag[i]["node"]["id"])
                             # comment = self.comment(self.media_by_tag[i]['id'], 'Cool!')
-                            # follow = self.follow(self.media_by_tag[i]['owner']['id'])
-                            if like:
+                            # follow = self.follow(self.media_by_tag[i]["owner"]["id"])
+                            if like != 0:
                                 if like.status_code == 200:
-                                    # Like is successful, all is ok!
+                                    # Like, all ok!
                                     self.error_400 = 0
                                     self.like_counter += 1
-                                    log_string = f"Liked media #{self.like_counter}: id: {media_to_like}, " \
-                                        f"url: {media_to_like_url}"
+                                    log_string = f"Liked: {self.media_by_tag[i]['node']['id']}. Like #{self.like_counter} {self.url_media % self.media_by_tag[i]['node']['shortcode']}."
 
                                     self.persistence.insert_media(
                                         media_id=self.media_by_tag[i]["node"]["id"],
@@ -651,15 +654,16 @@ class InstaBot:
                                     )
                                     self.logger.info(log_string)
                                 elif like.status_code == 400:
-                                    self.logger.info(f"Could not like media: id: {media_to_like}, "
-                                                     f"url: {media_to_like_url}. Reason: {like.text}")
+                                    self.logger.info(
+                                        f"Not liked: {like.status_code} message {like.text}"
+                                    )
                                     self.persistence.insert_media(
                                         media_id=self.media_by_tag[i]["node"]["id"],
                                         status="400",
                                     )
-                                    # Some error appeared. If it repeats - could be ban!
+                                    # Some error. If repeated - can be ban!
                                     if self.error_400 >= config.get("error_400_to_ban"):
-                                        # Looks like you are banned!
+                                        # Look like you banned!
                                         time.sleep(config.get("ban_sleep_time"))
                                     else:
                                         self.error_400 += 1
@@ -668,11 +672,11 @@ class InstaBot:
                                         media_id=self.media_by_tag[i]["node"]["id"],
                                         status=str(like.status_code),
                                     )
-                                    self.logger.debug(f"Could not like media: id: {media_to_like}, "
-                                                      f"url: {media_to_like_url}, status code: {like.status_code}. "
-                                                      f"Reason: {like.text}")
+                                    self.logger.debug(
+                                        f"Not liked: {like.status_code} message {like.text}"
+                                    )
                                     return False
-                                    # Some error
+                                    # Some error.
                                 i += 1
                                 if delay:
                                     time.sleep(
@@ -688,7 +692,7 @@ class InstaBot:
                     else:
                         return False
             else:
-                self.logger.debug("There are no medias found to like right now.")
+                self.logger.debug("No media to like!")
 
     def like(self, media_id):
         """ Send http request to like media by ID """
@@ -949,7 +953,7 @@ class InstaBot:
                                     break
 
                     if keyword_found is False:
-                        self.write_log(
+                        self.logger.debug(
                             f"Won't follow {username}: does not meet keywords requirement. Keywords not found."
                         )
                         return
@@ -1164,22 +1168,26 @@ class InstaBot:
             return True
 
     def auto_unlike(self):
-        media_to_unlike = self.persistence.get_medias_to_unlike()
-        if media_to_unlike:
-            request = self.unlike(media_to_unlike)
-            media_to_unlike_url = f"https://www.{self.get_instagram_url_from_media_id(media_to_unlike)}"
-            if request.status_code == 200:
-                self.persistence.update_media_complete(media_to_unlike)
-                self.logger.info(f"Unliked media: id: {media_to_unlike}, url: {media_to_unlike_url}")
-            elif request.status_code == 400 and request.text == 'missing media':
-                self.persistence.update_media_complete(media_to_unlike)
-                self.logger.info(f"Could not unlike media: id: {media_to_unlike}, url: {media_to_unlike_url}. It seems "
-                                 f"this media is no longer exist.")
+        checking = True
+        while checking:
+            media_to_unlike = self.persistence.get_medias_to_unlike()
+            if media_to_unlike:
+                request = self.unlike(media_to_unlike)
+                media_to_unlike_url = f"https://www.{self.get_instagram_url_from_media_id(media_to_unlike)}"
+                if request.status_code == 200:
+                    self.persistence.update_media_complete(media_to_unlike)
+                    self.logger.info(f"Unliked media: id: {media_to_unlike}, url: {media_to_unlike_url}")
+                elif request.status_code == 400 and request.text == 'missing media':
+                    self.persistence.update_media_complete(media_to_unlike)
+                    self.logger.info(f"Couldn't unlike media: id: {media_to_unlike}, url: {media_to_unlike_url}. "
+                                     f"It seems this media is no longer exist.")
+                else:
+                    self.logger.critical(f"Couldn't unlike media: id: {media_to_unlike}, url: {media_to_unlike_url}. "
+                                         f"Reason: {request.text}")
+                    checking = False
             else:
-                self.logger.critical(f"Could not unlike media: id: {media_to_unlike}, url: {media_to_unlike_url}. "
-                                     f"Reason: {request.text}")
-        else:
-            self.logger.debug("There are no medias left to unlike right now.")
+                self.logger.debug("There are no medias left to unlike right now.")
+                checking = False
 
     def auto_unfollow(self):
         checking = True
