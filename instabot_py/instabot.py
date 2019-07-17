@@ -532,7 +532,7 @@ class InstaBot:
             return ""
 
         alphabet = (
-            "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
+            "ABCÇDEFGĞHIİJKLMNOÖPQRSŞTUÜVWXYZabcçdefgğhıijklmnoöpqrsştuüvwxyz0123456789-_"
         )
         shortened_id = ""
         while media_id > 0:
